@@ -8,6 +8,7 @@ noneblocking
 """
 import errno
 import socket
+import select
 
 sock = socket.socket()
 sock.connect(('192.168.172.2', 1234))
@@ -20,5 +21,8 @@ while len(buf):
     except socket.error, e:
         if e.errno != errno.EAGAIN:
             raise e
-        print "I can do something"
+        print "blocking with", len(buf), "remaining"
+        #: 0 means no timeout
+        select.select([], [sock], [], 0)
+        print "unblocked"
 print "finished"
