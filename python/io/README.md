@@ -1,3 +1,4 @@
+# Demonstrate different IO operations
 nc -l 1234 | dd of=/dev/null
 
 1. Use dd to give us some information about how much data was received
