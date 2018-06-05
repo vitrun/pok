@@ -7,10 +7,10 @@ class Block(object):
     """The block structure"""
     difficulty = 4
 
-    def __init__(self, index, nonce, prev_hash, transactions):
+    def __init__(self, index, prev_hash, transactions):
         self.index = index
         self.timestamp = time.time()
-        self.nonce = nonce
+        self.nonce = 0
         self.prev_hash = prev_hash
         self.transactions = transactions
 

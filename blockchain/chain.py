@@ -43,17 +43,17 @@ class Chain(object):
         :param transactions: <Transaction list>
         :return: <Block>
         """
-        nonce, start_t = 0, time.time()
+        start_t = time.time()
         while True:
-            block = Block(index, nonce, prev_hash, transactions)
+            block = Block(index, prev_hash, transactions)
             if block.is_valid():
                 self.blocks.append(block)
                 logging.debug("Aha. Mined a valid block %s with nonce %s, "
                               "time: %d", block.hash, block.nonce,
                               time.time() - start_t)
                 return block
-            logging.debug("Mining, %d", nonce)
-            nonce += 1
+            logging.debug("Mining, %d", block.nonce)
+            block.increase_nonce()
 
     @property
     def last_block(self):
