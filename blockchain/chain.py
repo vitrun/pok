@@ -1,5 +1,10 @@
-from transaction import Transaction
-from block import Block
+from blockchain.transaction import Transaction
+from blockchain.block import Block
+
+import time
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 class Chain(object):
@@ -7,7 +12,7 @@ class Chain(object):
     def __init__(self):
         self.blocks = []
         self.current_transactions = []
-        self.new_block(1, 1)
+        self._add_block(0, 1, [])
 
     def new_transaction(self, sender, recipient, amount):
         """
@@ -20,11 +25,35 @@ class Chain(object):
         trx = Transaction(sender, recipient, amount)
         self.current_transactions.append(trx)
 
-    def new_block(self, proof, previous_hash):
-        prev_index = self.last_block.index + 1 if self.last_block else 1
-        block = Block(prev_index, proof, previous_hash, self.current_transactions)
-        self.blocks.append(block)
-        return block
+    def new_block(self):
+        """
+        Create new block with current transactions
+        :return: <Block>
+        """
+        if not self.current_transactions:
+            return None
+        index, prev_hash = self.last_block.index + 1, self.last_block.hash
+        return self._add_block(index, prev_hash, self.current_transactions)
+
+    def _add_block(self, index, prev_hash, transactions):
+        """
+        Create a proof-of-work valid block
+        :param index: <int>
+        :param prev_hash: <str>
+        :param transactions: <Transaction list>
+        :return: <Block>
+        """
+        nonce, start_t = 0, time.time()
+        while True:
+            block = Block(index, nonce, prev_hash, transactions)
+            if block.is_valid():
+                self.blocks.append(block)
+                logging.debug("Aha. Mined a valid block %s with nonce %s, "
+                              "time: %d", block.hash, block.nonce,
+                              time.time() - start_t)
+                return block
+            logging.debug("Mining, %d", nonce)
+            nonce += 1
 
     @property
     def last_block(self):
