@@ -9,14 +9,16 @@
 
 ### Concepts
 #### Transaction
-* Sends msg(coins) from one address to another
+* Sends msg from one address to another
 
 #### Block
 * Collection of transactions, together with meta fields
 
 #### Node
-* Accepts new transactions and validate it
-* Mining by putting all the pending transactions into a block
+* A HTTP server that:
+* Accepts new transactions and validates it
+* Mines by putting all the pending transactions into a block
+* Syncs transactions and blocks with peer nodes
 
 #### Chain
 * A list of blocks
@@ -25,7 +27,5 @@
 * Always choose the longest chain
 
 #### Wallet
-* Creates and submits new transactions
+* Creates and submits new transactions to seed nodes
 * Generates private keys and addresses
-* Show account balance
-

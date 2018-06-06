@@ -4,8 +4,7 @@ import ecdsa
 import binascii
 
 
-PUBKEY_MAGIC_BYTE = '\x04'
-ADDRESS_MAGIC_BYTE = '\x06'
+ADDRESS_MAGIC_BYTE = b'\x06'
 
 
 class Key(object):
@@ -23,7 +22,8 @@ class Key(object):
             )
         else:
             self._private_key = ecdsa.keys.SigningKey.from_string(
-                private_key, self._curve, self._hash_function
+                binascii.unhexlify(private_key), self._curve,
+                self._hash_function
             )
 
     @property
@@ -39,7 +39,7 @@ class Key(object):
         :return: public key string
         """
         ecdsa_public_key = self._private_key.get_verifying_key()
-        return (PUBKEY_MAGIC_BYTE + ecdsa_public_key.to_string()).hex()
+        return ecdsa_public_key.to_string().hex()
 
     @property
     def address(self):
@@ -65,3 +65,9 @@ class Key(object):
         """
         verify_key = self._private_key.get_verifying_key()
         return verify_key.verify(binascii.unhexlify(signature), data.encode())
+
+    @staticmethod
+    def verify_by_public_key(data, signature, public_key):
+        vk = ecdsa.VerifyingKey.from_string(
+            binascii.unhexlify(public_key), Key._curve, Key._hash_function)
+        return vk.verify(binascii.unhexlify(signature), data.encode())
