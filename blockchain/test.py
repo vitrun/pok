@@ -3,7 +3,6 @@ sys.path.insert(0, '../')
 
 from blockchain.chain import Chain
 from blockchain.key import Key
-from blockchain.block import Block
 from blockchain.node import Node
 from blockchain.transaction import Transaction
 
@@ -65,7 +64,7 @@ def test_block_validation():
     assert Node.mine_block(0, 0, [trx]).is_valid()
 
 
-def test_chain_validation():
+def make_chain():
     chain = Chain()
 
     sender, recipient = Key(), Key()
@@ -80,10 +79,20 @@ def test_chain_validation():
         trx.sign(sender.private_key)
         block = Node.mine_block(chain.height, chain.last_block.hash, [trx])
         chain.add_block(block)
+    return chain
 
-    assert chain.is_valid()
+
+def test_chain_validation():
+    assert make_chain().is_valid()
 
 
-def test_node_init():
+def test_node_init_genesis():
     node = Node()
     node.init()
+
+
+def test_node_init_sync():
+    chain = make_chain()
+    node = Node()
+    node.init(chain.blocks)
+    assert len(node.chain.blocks) == len(chain.blocks)
