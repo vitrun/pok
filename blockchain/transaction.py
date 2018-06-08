@@ -7,11 +7,11 @@ from blockchain.key import ADDRESS_MAGIC_BYTE, Key
 class Transaction(object):
     """A transaction"""
     def __init__(self, sender_addr: str, sender_key: str, recipient_addr: str,
-                 payload: object):
+                 payload: object, signature=None):
         self.sender = sender_addr
         self.recipient = recipient_addr
         self.payload = payload
-        self.signature = None
+        self.signature = signature
         self.sender_key = sender_key
 
     def json(self, with_sign=False):

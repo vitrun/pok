@@ -1,5 +1,6 @@
 from blockchain.transaction import Transaction
 from blockchain.block import Block
+from blockchain.chain import Chain
 
 import time
 import logging
@@ -13,21 +14,34 @@ class Node(object):
     """
     def __init__(self, peers=None):
         self.peers = peers or []
+        self.transactions = []
+        self.chain = Chain()
 
-    @staticmethod
-    def new_transaction(sender_addr, sender_key, recipient_addr, payload):
+    def init(self, blocks=None):
+        """
+        Sync blocks from other nodes or mine the genesis block
+        """
+        if blocks:
+            for b in blocks:
+                self.chain.add_block(b)
+        else:
+            self.mine_block(0, 0, [])
+
+    def add_transaction(self, sender_addr, sender_key, recipient_addr, payload,
+                        signature):
         """
         A new transaction to be included in next block
         """
-        return Transaction(sender_addr, recipient_addr, payload, sender_key)
+        transaction = Transaction(sender_addr, recipient_addr, payload,
+                                  sender_key, signature)
+        if transaction.is_valid():
+            self.transactions.append(transaction)
 
     @staticmethod
     def mine_block(index, prev_hash, transactions):
         """
         Create new block with current transactions
         """
-        if not transactions:
-            return None
         start_t = time.time()
         block = Block(index, prev_hash, transactions)
         while True:

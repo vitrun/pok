@@ -25,5 +25,8 @@ class Chain(object):
 
     def add_block(self, block):
         if block.is_valid():
-            self.blocks.append(block)
+            if not self.last_block:
+                self.blocks.append(block)
+            elif self.last_block.hash == block.prev_hash:
+                self.blocks.append(block)
 

@@ -82,3 +82,8 @@ def test_chain_validation():
         chain.add_block(block)
 
     assert chain.is_valid()
+
+
+def test_node_init():
+    node = Node()
+    node.init()
