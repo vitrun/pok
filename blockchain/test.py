@@ -11,7 +11,7 @@ def test_chain_init():
     test chain init
     """
     chain = Chain()
-    assert chain.blocks[0].hash.startswith('000')
+    assert not chain.last_block
 
 
 def test_key_init():
@@ -49,7 +49,7 @@ def test_public_verify():
 
 def test_transaction_validation():
     sender, recipient = Key(), Key()
-    trx = Transaction(sender.address, recipient.address, 'Hello world',
-                      sender.public_key)
+    trx = Transaction(sender.address, sender.public_key, recipient.address,
+                      'Hello world')
     trx.signature = trx.sign(sender.private_key)
     assert trx.is_valid()
