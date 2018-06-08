@@ -25,9 +25,11 @@ class Node(object):
             for b in blocks:
                 self.chain.add_block(b)
         else:
-            self.mine_block(0, 0, [])
+            block = self.mine_block(0, 0, [])
+            self.chain.add_block(block)
 
-    def add_block(self, block):
+    def add_block(self, doc):
+        block = Block.from_json(doc)
         self.chain.add_block(block)
 
     def add_transaction(self, sender_addr, sender_key, recipient_addr, payload,

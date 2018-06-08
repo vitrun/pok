@@ -58,4 +58,3 @@ class Block(object):
         :return: <Bool>
         """
         return block.hash.startswith('0' * difficulty)
-
