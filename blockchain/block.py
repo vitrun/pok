@@ -1,15 +1,13 @@
-import time
 import json
 import _sha256
 
 
 class Block(object):
     """The block structure"""
-    difficulty = 4
+    difficulty = 1
 
     def __init__(self, index, prev_hash, transactions):
         self.index = index
-        self.timestamp = time.time()
         self.nonce = 0
         self.prev_hash = prev_hash
         self.transactions = transactions
@@ -25,12 +23,12 @@ class Block(object):
         """
         doc = {
             'index': self.index,
-            'timestamp': self.timestamp,
             'nonce': self.nonce,
             'prev_hash': self.prev_hash,
-            'transactions': self.transactions
+            'transactions': [trx.json(with_sign=True) for trx in
+                             self.transactions]
         }
-        block_str = json.dumps(doc, sort_keys=True, ensure_ascii=True)
+        block_str = json.dumps(doc, sort_keys=True, ensure_ascii=False)
         return _sha256.sha256(block_str.encode()).hexdigest()
 
     def is_valid(self):
@@ -38,7 +36,8 @@ class Block(object):
         Whether it is a valid block
         :return: <Bool>
         """
-        return Block.proof_of_work(self, Block.difficulty)
+        return all([trx.is_valid() for trx in self.transactions])\
+            and Block.proof_of_work(self, Block.difficulty)
 
     @staticmethod
     def proof_of_work(block, difficulty):

@@ -14,17 +14,21 @@ class Transaction(object):
         self.signature = None
         self.sender_key = sender_key
 
-    def json(self):
-        return {
+    def json(self, with_sign=False):
+        doc = {
             'sender': self.sender,
             'recipient': self.recipient,
             'payload': self.payload,
             'key': self.sender_key
         }
+        if with_sign:
+            doc['signature'] = self.signature
+        return doc
 
     def sign(self, private_key):
         payload = json.dumps(self.json(), sort_keys=True, ensure_ascii=False)
-        return Key(private_key).sign(payload)
+        self.signature = Key(private_key).sign(payload)
+        return self.signature
 
     def is_valid(self):
         """

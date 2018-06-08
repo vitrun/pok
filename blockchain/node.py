@@ -22,15 +22,15 @@ class Node(object):
         return Transaction(sender_addr, recipient_addr, payload, sender_key)
 
     @staticmethod
-    def new_block(index, prev_hash, transactions):
+    def mine_block(index, prev_hash, transactions):
         """
         Create new block with current transactions
         """
         if not transactions:
             return None
         start_t = time.time()
+        block = Block(index, prev_hash, transactions)
         while True:
-            block = Block(index, prev_hash, transactions)
             if block.is_valid():
                 logging.debug("Aha. Mined a valid block %s with nonce %s, "
                               "time: %d", block.hash, block.nonce,
