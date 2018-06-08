@@ -6,20 +6,24 @@ from blockchain.key import ADDRESS_MAGIC_BYTE, Key
 
 class Transaction(object):
     """A transaction"""
-    def __init__(self, sender_addr: str, sender_key: str, recipient_addr: str,
+    def __init__(self, sender: str, sender_key: str, recipient: str,
                  payload: object, signature=None):
-        self.sender = sender_addr
-        self.recipient = recipient_addr
+        self.sender = sender
+        self.recipient = recipient
         self.payload = payload
         self.signature = signature
         self.sender_key = sender_key
+
+    @staticmethod
+    def from_json(doc):
+        return Transaction(**doc)
 
     def json(self, with_sign=False):
         doc = {
             'sender': self.sender,
             'recipient': self.recipient,
             'payload': self.payload,
-            'key': self.sender_key
+            'sender_key': self.sender_key
         }
         if with_sign:
             doc['signature'] = self.signature

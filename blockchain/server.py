@@ -11,18 +11,37 @@ from blockchain.node import Node
 node = Node()
 
 
-def sync_node(peers):
-    pass
+def ok(data=None):
+    return json.dumps({'code': 0, 'data': data})
 
 
 class BlockHandler(tornado.web.RequestHandler):
     def get(self):
-        self.write(json.dumps(node.chain.blocks))
+        self.write(ok(node.chain.blocks))
+
+    def post(self):
+        doc = json.loads(self.request.body)
+        node.add_block()
+
+class HeightHandler(tornado.web.RequestHandler):
+    def get(self):
+        self.write(ok(node.chain.height))
+
+
+class TransactionHandler(tornado.web.RequestHandler):
+    def post(self):
+        doc = json.loads(self.request.body)
+        node.add_transaction(doc['sender_addr'], doc['sender_key'],
+                             doc['recipient_addr'],
+                             doc['payload'], doc['signature'])
+        return ok()
 
 
 def make_app():
     return tornado.web.Application([
-      (r"/", BlockHandler),
+        (r"/chain/block/", BlockHandler),
+        (r"/chain/height/", HeightHandler),
+        (r"/transaction/", TransactionHandler),
     ])
 
 

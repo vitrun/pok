@@ -3,6 +3,7 @@ sys.path.insert(0, '../')
 
 from blockchain.chain import Chain
 from blockchain.key import Key
+from blockchain.block import Block
 from blockchain.node import Node
 from blockchain.transaction import Transaction
 
@@ -52,8 +53,18 @@ def test_transaction_validation():
     sender, recipient = Key(), Key()
     trx = Transaction(sender.address, sender.public_key, recipient.address,
                       'Hello world')
-    trx.signature = trx.sign(sender.private_key)
+    trx.sign(sender.private_key)
     assert trx.is_valid()
+
+
+def test_transaction_fromjson():
+    sender, recipient = Key(), Key()
+    trx = Transaction(sender.address, sender.public_key, recipient.address,
+                      'Hello world')
+    trx.sign(sender.private_key)
+    doc = trx.json(True)
+    trx2 = Transaction.from_json(doc)
+    assert trx.signature == trx2.signature
 
 
 def test_block_validation():
@@ -62,6 +73,16 @@ def test_block_validation():
                       'Hello world')
     trx.sign(sender.private_key)
     assert Node.mine_block(0, 0, [trx]).is_valid()
+
+
+def test_block_fromjson():
+    sender, recipient = Key(), Key()
+    trx = Transaction(sender.address, sender.public_key, recipient.address,
+                      'Hello world')
+    trx.sign(sender.private_key)
+    block = Node.mine_block(0, 0, [trx])
+    block2 = Block.from_json(block.json())
+    assert block.index == block2.index
 
 
 def make_chain():
@@ -73,7 +94,7 @@ def make_chain():
     trx.sign(sender.private_key)
     genesis = Node.mine_block(0, 0, [trx])
     chain.add_block(genesis)
-    for _ in range(1, 3):
+    for _ in range(1, 2):
         trx = Transaction(sender.address, sender.public_key,
                           recipient.address, "Hi")
         trx.sign(sender.private_key)

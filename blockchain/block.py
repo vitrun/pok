@@ -1,19 +1,35 @@
 import json
 import _sha256
 
+from blockchain.transaction import Transaction
+
 
 class Block(object):
     """The block structure"""
     difficulty = 1
 
-    def __init__(self, index, prev_hash, transactions):
+    def __init__(self, index, prev_hash, transactions, nonce=0):
         self.index = index
-        self.nonce = 0
+        self.nonce = nonce
         self.prev_hash = prev_hash
         self.transactions = transactions
 
     def increase_nonce(self):
         self.nonce += 1
+
+    @staticmethod
+    def from_json(doc):
+        trxs = [Transaction(**tdoc) for tdoc in doc['transactions']]
+        return Block(doc['index'], doc['prev_hash'], trxs, doc['nonce'])
+
+    def json(self):
+        return {
+            'index': self.index,
+            'nonce': self.nonce,
+            'prev_hash': self.prev_hash,
+            'transactions': [trx.json(with_sign=True) for trx in
+                             self.transactions]
+        }
 
     @property
     def hash(self):
@@ -21,13 +37,7 @@ class Block(object):
         Make a hash
         :return: <str>
         """
-        doc = {
-            'index': self.index,
-            'nonce': self.nonce,
-            'prev_hash': self.prev_hash,
-            'transactions': [trx.json(with_sign=True) for trx in
-                             self.transactions]
-        }
+        doc = self.json()
         block_str = json.dumps(doc, sort_keys=True, ensure_ascii=False)
         return _sha256.sha256(block_str.encode()).hexdigest()
 

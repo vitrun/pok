@@ -27,6 +27,9 @@ class Node(object):
         else:
             self.mine_block(0, 0, [])
 
+    def add_block(self, block):
+        self.chain.add_block(block)
+
     def add_transaction(self, sender_addr, sender_key, recipient_addr, payload,
                         signature):
         """
