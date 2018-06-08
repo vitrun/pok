@@ -1,4 +1,3 @@
-from blockchain.transaction import Transaction
 from blockchain.block import Block
 from blockchain.chain import Chain
 
@@ -12,8 +11,10 @@ class Node(object):
     """
     A node
     """
-    def __init__(self, peers=None):
-        self.peers = peers or []
+
+    TRX_PER_BLOCK = 2
+
+    def __init__(self):
         self.transactions = []
         self.chain = Chain()
 
@@ -32,15 +33,24 @@ class Node(object):
         block = Block.from_json(doc)
         self.chain.add_block(block)
 
-    def add_transaction(self, sender_addr, sender_key, recipient_addr, payload,
-                        signature):
+    def add_transaction(self, transaction):
         """
         A new transaction to be included in next block
         """
-        transaction = Transaction(sender_addr, recipient_addr, payload,
-                                  sender_key, signature)
         if transaction.is_valid():
             self.transactions.append(transaction)
+
+    def mine(self):
+        if len(self.transactions) > self.TRX_PER_BLOCK:
+            logging.info("mining new block")
+            block = Node.mine_block(self.chain.height,
+                                    self.chain.last_block.hash,
+                                    self.transactions)
+            self.chain.add_block(block)
+            #: clear
+            self.transactions = []
+            return block
+        return None
 
     @staticmethod
     def mine_block(index, prev_hash, transactions):
