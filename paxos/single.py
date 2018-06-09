@@ -6,7 +6,9 @@ import argparse
 import random
 import threading
 import json
-import time
+
+
+logging.basicConfig(level=logging.INFO)
 
 
 class Node(object):
@@ -48,20 +50,24 @@ class Node(object):
             return False
 
         for node in self.nodes:
-            if node == self.port:
+            if int(node) == self.port:
                 continue
-            res = requests.post('http://localhost:%s/prepare/' % node, json={
-                'n': self.n
-            })
-            if res.ok():
-                data = res.json()
-                if int(data['n']) > self.n:
-                    logging.warning('Refused by node ', node)
-                    continue
-                #: suggest should be [m, v]
-                promises.append((data['n'], data['v']))
-            else:
-                logging.warning('Failed to contact ', node)
+            try:
+                res = requests.post('http://localhost:%s/prepare/' % node, json={
+                    'n': self.n
+                })
+                if res.ok:
+                    data = res.json()['data']
+                    if int(data['n']) > self.n:
+                        logging.warning('Refused by node ', node)
+                        continue
+                    #: suggest should be [m, v]
+                    promises.append((data['n'], data['v']))
+                else:
+                    logging.warning('Failed to contact ', node)
+            except Exception as e:
+                logging.error('Failed when try_prepare: ', e)
+
         return self._resolve(promises, v)
 
     def _resolve(self, promises, v):
@@ -74,13 +80,14 @@ class Node(object):
                             len(self.nodes))
             return False
         #: listen to suggest with max n or use v
-        self.v, max_n = v, -1
+        self.v, max_n, use_other = v, self.n, False
         for suggest in promises:
             if suggest[0] > max_n and suggest[1]:
                 max_n = suggest[0]
                 self.v = suggest[1]
+                use_other = True
         logging.info('%d/%d nodes answered, will use v: %d by %s', answered, len(self.nodes),
-                     self.v, 'other node' if max_n else 'me')
+                     self.v, 'other node' if use_other else 'me')
         return True
 
     def try_accept(self, v):
@@ -89,22 +96,22 @@ class Node(object):
         """
         accepts = []
         for node in self.nodes:
-            if node == self.port:
+            if int(node) == self.port:
                 continue
-            res = requests.post('http://localhost:%d/accept/', json={
+            res = requests.post('http://localhost:%s/accept/' % node, json={
                 'n': self.n,
                 'v': v,
             })
-            if res.ok():
-                data = res.json()
+            if res.ok:
+                data = res.json()['data']
                 if int(data['n']) != self.n:
-                    logging.warning('Node %d betrayed with n: %d. mine: %d', node, data['n'],
+                    logging.warning('Node %s betrayed with n: %s. mine: %s', node, data['n'],
                                     self.n)
                     continue
                 if data['v'] == self.v:
                     accepts.append(node)
                 else:
-                    logging.error('Node %d accept my n: %d, but returned v: %d', node, self.n,
+                    logging.error('Node %s accept my n: %s, but returned v: %s', node, self.n,
                                   data['v'])
         if len(accepts) < (len(self.nodes) - 1) / 2:
             logging.warning('Failed to accept, only %d/%d accepted', len(accepts), len(self.nodes))
@@ -127,12 +134,12 @@ class Node(object):
         """
         Accept the n, v pair
         """
-        if self.n == n and self.v == v:
-            logging.warning('Accepted, set my state to %d', v)
-            self.state = v
+        if self.n == n:
+            logging.warning('Accepted, set my v to %d', v)
+            self.v = v
             return n, v
         else:
-            logging.warning('Can not accept n:%d, v:%d. My n: %d, my v: %d', n, v, self.n, self.v)
+            logging.warning('Can not accept n:%s, v:%s. My n: %s, my v: %s', n, v, self.n, self.v)
             return self.n, self.v
 
 
@@ -147,7 +154,12 @@ class StateHandler(tornado.web.RequestHandler):
     def post(self):
         val = int(self.get_argument('value'))
         res = paxos_node.try_prepare(val)
-        self.write(ok(res))
+        if res:
+            paxos_node.try_accept(paxos_node.v)
+        self.write(ok({'state': paxos_node.state}))
+
+    def get(self):
+        self.write(ok({'state': paxos_node.state}))
 
 
 class ResetHandler(tornado.web.RequestHandler):
@@ -195,6 +207,7 @@ if __name__ == '__main__':
     if args.nodes:
         paxos_node.nodes = args.nodes.split(',')
     if args.port:
+        paxos_node.port = args.port
         app = make_app()
         app.listen(args.port)
         tornado.ioloop.IOLoop.current().start()
