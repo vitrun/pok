@@ -31,7 +31,8 @@ class Node(object):
 
     def add_block(self, doc):
         block = Block.from_json(doc)
-        self.chain.add_block(block)
+        if block.index == self.chain.height:
+            self.chain.add_block(block)
 
     def add_transaction(self, transaction):
         """

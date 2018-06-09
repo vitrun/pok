@@ -5,7 +5,9 @@ from blockchain.key import ADDRESS_MAGIC_BYTE, Key
 
 
 class Transaction(object):
-    """A transaction"""
+    """
+    A transaction. Only check the authentication
+    """
     def __init__(self, sender: str, sender_key: str, recipient: str,
                  payload: object, signature=None):
         self.sender = sender

@@ -93,7 +93,7 @@ class TransactionHandler(tornado.web.RequestHandler):
 
 
 class ConsensusHandler(tornado.web.RequestHandler):
-    def get(self):
+    def post(self):
         #: find the longest chain
         max_height, target_peer = 0, None
         for peer in peers:
@@ -112,7 +112,7 @@ class ConsensusHandler(tornado.web.RequestHandler):
 
 
 class MineHandler(tornado.web.RequestHandler):
-    def get(self):
+    def post(self):
         node.mine()
         self.write(ok())
 
@@ -148,8 +148,6 @@ if __name__ == "__main__":
         app = make_app()
         app.listen(args.port)
         tornado.ioloop.IOLoop.current().start()
-    elif args.which == 'sign' and args.private:
-        key = Key(args.private)
     else:
         key = Key()
         print('private: %s\npublic: %s\naddress: %s\n' % (key.private_key,
