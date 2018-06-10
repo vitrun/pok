@@ -4,7 +4,6 @@ import tornado.ioloop
 import tornado.web
 import argparse
 import random
-import threading
 import json
 import time
 
@@ -15,9 +14,11 @@ class Node(object):
     def __init__(self):
         self.nodes = []
         self.port = None
+        #: number we'll prepare with
         self.n = None
+        #: value to propose
         self.v = None
-        #: the cluster try to agree upon same state
+        #: try to agree upon this state
         self.state = None
         self.reset()
 
@@ -52,7 +53,7 @@ class Node(object):
             if int(node) == self.port:
                 continue
             logging.warning('Sleep for %s seconds. Please try to set the state to some different '
-                            'value by requesting another node. We can see how the cluster react.',
+                            'value by requesting another node. Check how the cluster will react.',
                             sleep)
 
             try:
