@@ -6,6 +6,7 @@ import argparse
 import random
 import threading
 import json
+import time
 
 
 logging.basicConfig(level=logging.INFO)
@@ -59,12 +60,12 @@ class Node(object):
                 if res.ok:
                     data = res.json()['data']
                     if int(data['n']) > self.n:
-                        logging.warning('Refused by node ', node)
+                        logging.warning('Refused by node %d', node)
                         continue
                     #: suggest should be [m, v]
                     promises.append((data['n'], data['v']))
                 else:
-                    logging.warning('Failed to contact ', node)
+                    logging.warning('Failed to contact %d', node)
             except Exception as e:
                 logging.error('Failed when try_prepare: ', e)
 
@@ -80,7 +81,7 @@ class Node(object):
                             len(self.nodes))
             return False
         #: listen to suggest with max n or use v
-        self.v, max_n, use_other = v, self.n, False
+        self.v, max_n, use_other = v, 0, False
         for suggest in promises:
             if suggest[0] > max_n and suggest[1]:
                 max_n = suggest[0]
@@ -104,12 +105,11 @@ class Node(object):
             })
             if res.ok:
                 data = res.json()['data']
-                if int(data['n']) != self.n:
-                    logging.warning('Node %s betrayed with n: %s. mine: %s', node, data['n'],
-                                    self.n)
-                    continue
                 if data['v'] == self.v:
                     accepts.append(node)
+                    if int(data['n']) > self.n:
+                        logging.warning('Node %s overwhelmed with n: %s. mine: %s', node, data['n'],
+                                        self.n)
                 else:
                     logging.error('Node %s accept my n: %s, but returned v: %s', node, self.n,
                                   data['v'])
@@ -121,6 +121,21 @@ class Node(object):
             self.state = v
             return True
 
+    def try_teach(self):
+        """
+        Broadcast the state to all learners
+        """
+        if not self.state:
+            return
+        for node in self.nodes:
+            if node == self.port:
+                continue
+            res = requests.post('http://localhost:%d/learn/' % node, json = {
+                'state': self.state
+            })
+            if res.ok:
+                logging.info("Node %d has learned sate %d", node, self.state)
+
     def promised(self, n):
         """
         Promise some node that I won't accept others
@@ -128,7 +143,7 @@ class Node(object):
         if self._init_n(n):
             #: Got my promise
             return n, None
-        return n, self.v
+        return self.n, self.v
 
     def accepted(self, n, v):
         """
@@ -142,6 +157,12 @@ class Node(object):
             logging.warning('Can not accept n:%s, v:%s. My n: %s, my v: %s', n, v, self.n, self.v)
             return self.n, self.v
 
+    def learned(self, state):
+        """
+        Learn the conclusion
+        """
+        self.state = state
+
 
 paxos_node = Node()
 
@@ -152,14 +173,23 @@ def ok(data=None):
 
 class StateHandler(tornado.web.RequestHandler):
     def post(self):
+        if paxos_node.state:
+            self.write(ok('State is resolved. please reset.'))
+            return
+        time.sleep(random.randrange(1, 3))
         val = int(self.get_argument('value'))
         res = paxos_node.try_prepare(val)
         if res:
-            paxos_node.try_accept(paxos_node.v)
+            if paxos_node.try_accept(paxos_node.v):
+                paxos_node.try_teach()
         self.write(ok({'state': paxos_node.state}))
 
     def get(self):
-        self.write(ok({'state': paxos_node.state}))
+        self.write(ok({
+            'state': paxos_node.state,
+            'n': paxos_node.n,
+            'v': paxos_node.v
+        }))
 
 
 class ResetHandler(tornado.web.RequestHandler):
@@ -188,12 +218,20 @@ class AcceptHandler(tornado.web.RequestHandler):
         }))
 
 
+class LearnHandler(tornado.web.RequestHandler):
+    def post(self):
+        doc = json.loads(self.request.body)
+        paxos_node.learned(doc['state'])
+        self.write(ok())
+
+
 def make_app():
     return tornado.web.Application([
         (r"/state/", StateHandler),
         (r"/accept/", AcceptHandler),
         (r"/prepare/", PrepareHandler),
         (r"/reset/", ResetHandler),
+        (r"/learn/", LearnHandler),
     ])
 
 
@@ -205,7 +243,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.nodes:
-        paxos_node.nodes = args.nodes.split(',')
+        paxos_node.nodes = [int(n) for n in args.nodes.split(',')]
     if args.port:
         paxos_node.port = args.port
         app = make_app()

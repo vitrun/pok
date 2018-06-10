@@ -23,6 +23,7 @@ unless it has already responded to a prepare request with a value higher than n.
 ![Accept-2](img/propose-3.jpg)
 
 ### Learner
+Once accepted by the majority, broadcast the conclusion to the rest of the learners.
 
 ## Running
 - Requirement
