@@ -31,10 +31,9 @@ Once accepted by the majority, broadcast the conclusion to the rest of the learn
     pip install -r requirements.txt
     ```
 
-- Start (2f+1) nodes. Argument fail means the possibility of not responding to request, to mimic 
-the network failure
+- Start (2f+1) nodes. 
     ```
-    python node.py 8081 --fail=0.3
+    python node.py 8081
     ```
     
 - Set the state. Send the request to multiple nodes to check how they resolve conflicts.
@@ -43,7 +42,19 @@ the network failure
     ```
     
     
-- Start a new round. 
+- Reset to start a new round. 
     ```
     curl -XPOST 'http://localhost:8081/reset/' 
     ```
+
+### Consensus
+- Start a 5-node cluster
+- Try to set the state with long network delay
+   ```
+    curl 'localhost:8081/state/' -d 'value=1&delay=5'
+   ```
+- Try to set the state via another node without network delay
+   ```
+    curl 'localhost:8083/state/' -d 'value=3'
+   ```
+- Reset the cluster. Then adjust the delay value, and see how the cluster come to consensus.

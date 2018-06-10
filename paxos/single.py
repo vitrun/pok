@@ -8,7 +8,6 @@ import threading
 import json
 import time
 
-
 logging.basicConfig(level=logging.INFO)
 
 
@@ -20,8 +19,6 @@ class Node(object):
         self.v = None
         #: the cluster try to agree upon same state
         self.state = None
-        #: to protect n
-        self.lock = threading.Lock()
         self.reset()
 
     def reset(self):
@@ -35,28 +32,33 @@ class Node(object):
         Init the n
         :return: True if newly initiated
         """
-        with self.lock:
-            if self.n:
-                return False
-            self.n = n or random.randrange(1, 10)
-            return True
+        if self.n:
+            return False
+        self.n = n or random.randrange(1, 10)
+        return True
 
-    def try_prepare(self, v):
+    def try_prepare(self, v, sleep=0):
         """
         Try to have other nodes' promises or learn about their suggestions
         """
         promises = []
         if not self._init_n():
             #: Already prepared or promised some other node
+            logging.warning('I have promised with %d', self.n)
             return False
 
+        random.shuffle(self.nodes)
         for node in self.nodes:
             if int(node) == self.port:
                 continue
+            logging.warning('Sleep for %s seconds. Please try to set the state to some different '
+                            'value by requesting another node. We can see how the cluster react.',
+                            sleep)
+
             try:
                 res = requests.post('http://localhost:%s/prepare/' % node, json={
                     'n': self.n
-                })
+                }, timeout=3)
                 if res.ok:
                     data = res.json()['data']
                     if int(data['n']) > self.n:
@@ -67,7 +69,8 @@ class Node(object):
                 else:
                     logging.warning('Failed to contact %d', node)
             except Exception as e:
-                logging.error('Failed when try_prepare: ', e)
+                logging.error('Failed when try_prepare: %s', e)
+            time.sleep(sleep)
 
         return self._resolve(promises, v)
 
@@ -96,23 +99,30 @@ class Node(object):
         Try to make other nodes accept my value
         """
         accepts = []
+        random.shuffle(self.nodes)
+        print(self.nodes)
         for node in self.nodes:
             if int(node) == self.port:
                 continue
-            res = requests.post('http://localhost:%s/accept/' % node, json={
-                'n': self.n,
-                'v': v,
-            })
-            if res.ok:
-                data = res.json()['data']
-                if data['v'] == self.v:
-                    accepts.append(node)
-                    if int(data['n']) > self.n:
-                        logging.warning('Node %s overwhelmed with n: %s. mine: %s', node, data['n'],
-                                        self.n)
-                else:
-                    logging.error('Node %s accept my n: %s, but returned v: %s', node, self.n,
-                                  data['v'])
+            try:
+                res = requests.post('http://localhost:%s/accept/' % node, json={
+                    'n': self.n,
+                    'v': v,
+                }, timeout=3)
+                if res.ok:
+                    data = res.json()['data']
+                    if data['v'] == self.v:
+                        accepts.append(node)
+                        if int(data['n']) > self.n:
+                            logging.warning('Node %s overwhelmed with n: %s. mine: %s', node,
+                                            data['n'],
+                                            self.n)
+                    else:
+                        logging.error('Node %s accept my n: %s, but returned v: %s', node, self.n,
+                                      data['v'])
+            except Exception as e:
+                logging.warning('Failed to contact node %d: %s', node, e)
+
         if len(accepts) < (len(self.nodes) - 1) / 2:
             logging.warning('Failed to accept, only %d/%d accepted', len(accepts), len(self.nodes))
             return False
@@ -127,14 +137,18 @@ class Node(object):
         """
         if not self.state:
             return
+        random.shuffle(self.nodes)
         for node in self.nodes:
             if node == self.port:
                 continue
-            res = requests.post('http://localhost:%d/learn/' % node, json = {
-                'state': self.state
-            })
-            if res.ok:
-                logging.info("Node %d has learned sate %d", node, self.state)
+            try:
+                res = requests.post('http://localhost:%d/learn/' % node, json={
+                    'state': self.state
+                }, timeout=3)
+                if res.ok:
+                    logging.info("Node %d has learned sate %d", node, self.state)
+            except Exception as e:
+                logging.warning('Failed to teach node %d', node)
 
     def promised(self, n):
         """
@@ -167,6 +181,11 @@ class Node(object):
 paxos_node = Node()
 
 
+def delay():
+    delta = random.randrange(1, 10)
+    time.sleep(0.3 + delta * 0.2)
+
+
 def ok(data=None):
     return json.dumps({'code': 0, 'data': data or {}})
 
@@ -176,16 +195,18 @@ class StateHandler(tornado.web.RequestHandler):
         if paxos_node.state:
             self.write(ok('State is resolved. please reset.'))
             return
-        time.sleep(random.randrange(1, 3))
         val = int(self.get_argument('value'))
-        res = paxos_node.try_prepare(val)
+        delay = int(self.get_argument('delay', 0))
+        res = paxos_node.try_prepare(val, delay)
+        accepted = False
         if res:
-            if paxos_node.try_accept(paxos_node.v):
-                paxos_node.try_teach()
-        self.write(ok({'state': paxos_node.state}))
+            accepted = paxos_node.try_accept(paxos_node.v)
+        self.finish(ok({'state': paxos_node.state}))
+        if accepted:
+            paxos_node.try_teach()
 
     def get(self):
-        self.write(ok({
+        self.finish(ok({
             'state': paxos_node.state,
             'n': paxos_node.n,
             'v': paxos_node.v
@@ -195,14 +216,15 @@ class StateHandler(tornado.web.RequestHandler):
 class ResetHandler(tornado.web.RequestHandler):
     def post(self):
         paxos_node.reset()
-        self.write(ok(True))
+        self.finish(ok(True))
 
 
 class PrepareHandler(tornado.web.RequestHandler):
     def post(self):
         doc = json.loads(self.request.body)
         n, v = paxos_node.promised(doc['n'])
-        self.write(ok({
+        delay()
+        self.finish(ok({
             'n': n,
             'v': v
         }))
@@ -212,7 +234,8 @@ class AcceptHandler(tornado.web.RequestHandler):
     def post(self):
         doc = json.loads(self.request.body)
         my_n, my_v = paxos_node.accepted(doc['n'], doc['v'])
-        self.write(ok({
+        delay()
+        self.finish(ok({
             'n': my_n,
             'v': my_v
         }))
@@ -222,7 +245,7 @@ class LearnHandler(tornado.web.RequestHandler):
     def post(self):
         doc = json.loads(self.request.body)
         paxos_node.learned(doc['state'])
-        self.write(ok())
+        self.finish(ok())
 
 
 def make_app():
@@ -238,7 +261,6 @@ def make_app():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('port', type=int, help='HTTP port')
-    parser.add_argument('--fail', type=float, help='network failure ratio')
     parser.add_argument('--nodes', type=str, help='node list')
     args = parser.parse_args()
 
