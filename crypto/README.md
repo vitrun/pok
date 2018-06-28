@@ -67,3 +67,4 @@ While DH uses a multiplicative group of integers modulo a prime p, ECDH uses a m
 * https://en.wikipedia.org/wiki/Trapdoor_function
 * https://math.stackexchange.com/questions/317898/does-the-difficulty-of-discrete-logarithm-depend-on-the-difficulty-of-integer-fa
 * https://crypto.stackexchange.com/questions/29906/how-does-diffie-hellman-differ-from-elliptic-curve-diffie-hellman
+* https://www.tutorialspoint.com/cryptography/public_key_encryption.htm
