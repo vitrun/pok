@@ -45,7 +45,7 @@ An elliptic curve is the set of points that satisfy a specific mathematical equa
 y2 = x3 + ax + b
 
 Let's imagine this curve as the setting for a bizarre game of billiards. Take any two points on the curve and draw a line through them, it will intersect the curve at exactly one more place. In this game of billiards, you take a ball at point A, shoot it towards point B. When it hits the curve, the ball bounces either straight up (if it's below the x-axis) or straight down (if it's above the x-axis) to the other side of the curve.
-![Elliptic curve](elliptic_curve.gif)
+![Elliptic curve](img/elliptic_curve.gif)
 
 We can call this billiards move on two points "dot." Any two points on a curve can be dotted together to get a new point.
 
