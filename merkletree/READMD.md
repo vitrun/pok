@@ -24,6 +24,19 @@ In addition to the transaction hash C , we also need D, S(A,B), and S(S(E,F),S(G
 
 The efficiency here is that we proved a transaction belonged in a block with only 3 accompanying pieces of information (instead of the 7 other transactions that were stored in the block). This efficiency becomes exponentially more pronounced with larger trees.
 
+## Implementation
+**Handling odd number**
+
+For the case of Bitcoin, where Merkle Tree is used, in case the number of transactions is odd at some level of the tree then you just copy the element onto the right to form a pair.
+
+**Create a new Merkle Tree from the list of Content**
+
+**Get the Merkle Root of the tree**
+
+**Verify the entire tree is valid**
+
+**Verify a specific content in in the tree**
+
 ## REF
 * https://en.wikipedia.org/wiki/Merkle_tree
 * https://brilliant.org/wiki/merkle-tree/
