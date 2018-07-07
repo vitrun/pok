@@ -6,9 +6,10 @@ class Node(object):
     Each node as, as attributes, references to left and right children, parent and sibling node.
     """
 
-    def __init__(self, data):
-        self.val = sha256(str(data).encode('utf8')).hexdigest()
+    def __init__(self, data=None):
+        self.val = data is not None and sha256(str(data).encode('utf8')).hexdigest() or None
         self.l = None
+        self.data = str(data)
         self.r = None
         self.p = None
         self.sib = None
@@ -22,9 +23,7 @@ class MerkleTree(object):
     def __init__(self, data_list=None):
         self.leaves = data_list and [Node(data) for data in data_list] or []
         self.root = None
-
-    def add(self, data):
-        self.leaves.append(Node(data))
+        self.build()
 
     def build(self):
         """
@@ -42,6 +41,8 @@ class MerkleTree(object):
         """
         Build the next aggregation level
         """
+        if len(layer) == 1:
+            return layer
         # duplicate the last element if it has odd elements
         if len(layer) % 2:
             layer.append(layer[-1])
@@ -65,14 +66,46 @@ class MerkleTree(object):
         if not (node.l and node.r):
             return True
         return node.val == Node(node.l.val + node.r.val).val and MerkleTree._validate(node.l) and \
-               MerkleTree._validate(node.r)
+            MerkleTree._validate(node.r)
+
+    def append(self, data):
+        """
+        append new data.
+        """
+        # FIXME. do not recalculate the whole thing
+        self.leaves.append(Node(data))
+        self.build()
+
+    def echo(self):
+        """
+        print the tree
+        """
+        idx, l, cnt = 0, [self.root], 1
+        buffer = ''
+        while l:
+            node = l.pop(0)
+            if idx == cnt - 1:
+                print(' ' * (20-cnt)*2 + buffer)
+                buffer = ''
+                cnt *= 2
+            buffer += '%7s' % node.data[-4:]
+            if node.l:
+                l.append(node.l)
+            if node.r:
+                l.append(node.r)
+            idx += 1
+        print(' ' * (20-cnt)*2 + buffer)
 
 
 if __name__ == '__main__':
     # build
-    tree = MerkleTree(range(20))
-    tree.build()
+    tree = MerkleTree(range(3))
     print(tree.root.val)
-
     # validate
     print('valid: ', tree.validate())
+    tree.echo()
+
+    # append
+    new_tree = MerkleTree(range(4))
+    tree.append(3)
+    print('%s == %s' % (tree.root.val, new_tree.root.val))

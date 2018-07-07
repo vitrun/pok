@@ -40,4 +40,4 @@ For the case of Bitcoin, where Merkle Tree is used, in case the number of transa
 ## REF
 * https://en.wikipedia.org/wiki/Merkle_tree
 * https://brilliant.org/wiki/merkle-tree/
-* https://github.com/Blockchain-for-Developers/merkle-tree
+* https://github.com/Blockchain-for-Developers/merkle-tree**
