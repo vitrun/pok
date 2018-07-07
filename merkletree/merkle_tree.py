@@ -1,18 +1,21 @@
+#encoding:utf8
+
 from hashlib import sha256
 
 
 class Node(object):
     """
-    Each node as, as attributes, references to left and right children, parent and sibling node.
+    Each node as, as attributes, references to left and right children, parent
     """
 
     def __init__(self, data=None):
-        self.val = data is not None and sha256(str(data).encode('utf8')).hexdigest() or None
+        self.val = data is not None and sha256(data).hexdigest() or None
         self.l = None
-        self.data = str(data)
+        self.data = data
+        # height
+        self.h = 0
         self.r = None
         self.p = None
-        self.sib = None
 
 
 class MerkleTree(object):
@@ -30,29 +33,35 @@ class MerkleTree(object):
         Build up the whole tree from the leaves
         """
         # copy the leaves
-        layer = self.leaves[::]
+        height, layer = 0, self.leaves[::]
         # reduce the leaves to exactly one node
         while len(layer) != 1:
-            layer = self._build(layer)
+            layer = self._build(layer, height)
+            height += 1
         self.root = layer[0]
 
     @staticmethod
-    def _build(layer):
+    def _build(layer, height):
         """
         Build the next aggregation level
         """
         if len(layer) == 1:
             return layer
-        # duplicate the last element if it has odd elements
+        odd = None
         if len(layer) % 2:
-            layer.append(layer[-1])
+            # promote to higher level
+            odd = layer.pop(-1)
+            # layer.append(layer[-1])
         new_layer = []
         for idx in range(0, len(layer), 2):
             node = Node(layer[idx].val + layer[idx + 1].val)
+            node.h = height + 1
             node.l, node.r = layer[idx], layer[idx + 1]
             layer[idx].p, layer[idx + 1].p = node, node
-            layer[idx].sib, layer[idx + 1].sib = layer[idx + 1].sib, layer[idx].sib
             new_layer.append(node)
+        if odd:
+            odd.h += 1
+            new_layer.append(odd)
         return new_layer
 
     def validate(self):
@@ -80,32 +89,48 @@ class MerkleTree(object):
         """
         print the tree
         """
-        idx, l, cnt = 0, [self.root], 1
-        buffer = ''
+        last_node, l, buffer = None, [self.root], ''
         while l:
             node = l.pop(0)
-            if idx == cnt - 1:
-                print(' ' * (20-cnt)*2 + buffer)
+            if last_node and last_node.h != node.h:
+                print(buffer)
                 buffer = ''
-                cnt *= 2
-            buffer += '%7s' % node.data[-4:]
+            buffer += '%6s' % node.data[-4:]
             if node.l:
                 l.append(node.l)
             if node.r:
                 l.append(node.r)
-            idx += 1
-        print(' ' * (20-cnt)*2 + buffer)
+            last_node = node
+        print(buffer)
+
+    def contains(self, data, pos):
+        """
+        Check if data is in specific position
+        """
+        node = self.leaves[pos]
+        tmp = Node(data)
+        while node != self.root:
+            if tmp.val != node.val:
+                return False
+            if not node.p:
+                break
+            if node.p.l == node:
+                # I'm the left node
+                tmp = Node(tmp.val + node.p.r.val)
+            else:
+                # I'm the right node
+                tmp = Node(node.p.l.val + tmp.val)
+            # import ipdb; ipdb.set_trace()
+            node = node.p
+        return tmp.val == self.root.val
 
 
 if __name__ == '__main__':
     # build
-    tree = MerkleTree(range(3))
+    tree = MerkleTree(['a', '3', '你'])
     print(tree.root.val)
     # validate
     print('valid: ', tree.validate())
     tree.echo()
-
-    # append
-    new_tree = MerkleTree(range(4))
-    tree.append(3)
-    print('%s == %s' % (tree.root.val, new_tree.root.val))
+    # contains
+    print(tree.contains('你', 2))

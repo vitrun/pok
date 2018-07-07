@@ -3,9 +3,10 @@ Merkle tree is a tree in which every non-leaf node is labeled with the hash of t
 ![](img/merkle_tree.png)
 
 ## Uses
-* consistency verification
-* data verification
-* data synchronization
+* Check if the data belongs in the merkle tree
+* To concisely prove the validity of data being part of a dataset without storing the whole data set
+* To ensure the validity of a certain data set being inclusive in a larger data set without 
+revealing either the complete data set or its subset.
 
 ### Examples
 ##### P2P download
@@ -30,12 +31,21 @@ The efficiency here is that we proved a transaction belonged in a block with onl
 For the case of Bitcoin, where Merkle Tree is used, in case the number of transactions is odd at some level of the tree then you just copy the element onto the right to form a pair.
 
 **Create a new Merkle Tree from the list of Content**
-
+```python
+    tree = MerkleTree(['a', '3', '你'])
+```
 **Get the Merkle Root of the tree**
-
+```python
+    tree.root.val
+```
 **Verify the entire tree is valid**
-
+```python
+    tree.validate()
+```
 **Verify a specific content in in the tree**
+```python
+    tree.contains('你', 2)
+```
 
 ## REF
 * https://en.wikipedia.org/wiki/Merkle_tree
