@@ -5,3 +5,4 @@ by implementation
 * [IO](io/)
 * [Paxos algorithm](paxos/)
 * [Crypto](crypto/)
+* [Merkle tree](merkletree/)
