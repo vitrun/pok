@@ -26,6 +26,16 @@ In addition to the transaction hash C , we also need D, S(A,B), and S(S(E,F),S(G
 The efficiency here is that we proved a transaction belonged in a block with only 3 accompanying pieces of information (instead of the 7 other transactions that were stored in the block). This efficiency becomes exponentially more pronounced with larger trees.
 
 ## Implementation
+
+Different Merkle tree implementations handle "orphan" leaves in different ways. Our trees conform
+ to the diagrams below; orphan leaves are not duplicated or hashed multiple times. They are 
+ promoted to higher level of the tree.
+```
+     ┌───┴──┐       ┌────┴───┐         ┌─────┴─────┐
+  ┌──┴──┐   │    ┌──┴──┐     │      ┌──┴──┐     ┌──┴──┐
+┌─┴─┐ ┌─┴─┐ │  ┌─┴─┐ ┌─┴─┐ ┌─┴─┐  ┌─┴─┐ ┌─┴─┐ ┌─┴─┐   │
+   (5-leaf)         (6-leaf)             (7-leaf)
+``` 
 **Handling odd number**
 
 For the case of Bitcoin, where Merkle Tree is used, in case the number of transactions is odd at some level of the tree then you just copy the element onto the right to form a pair.
@@ -50,4 +60,5 @@ For the case of Bitcoin, where Merkle Tree is used, in case the number of transa
 ## REF
 * https://en.wikipedia.org/wiki/Merkle_tree
 * https://brilliant.org/wiki/merkle-tree/
-* https://github.com/Blockchain-for-Developers/merkle-tree**
+* https://github.com/Blockchain-for-Developers/merkle-tree
+* https://github.com/NebulousLabs/merkletree
