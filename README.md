@@ -1,8 +1,14 @@
 # Proof of Knowledge 
 by implementation
 
+### Blockchain
 * [A simple block chain](blockchain/)
-* [IO](io/)
-* [Paxos algorithm](paxos/)
-* [Crypto](crypto/)
 * [Merkle tree](merkletree/)
+* [Crypto](crypto/)
+
+### Consensus
+* [Paxos algorithm](paxos/)
+* [Raft algorithm](raft/)
+
+### Misc
+* [IO](io/)
