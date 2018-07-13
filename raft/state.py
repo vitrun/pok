@@ -2,30 +2,7 @@ import asyncio
 import random
 
 from .log import Log
-
-
-class Timer(object):
-    """A timer"""
-    def __init__(self, interval, callback, loop):
-        self.interval = interval
-        self.callback = callback
-        self.loop = loop
-        self.handler = None
-
-    def start(self):
-        self.callback()
-        self.handler = self.loop.call_latter(self.interval, self.callback)
-
-    def reset(self):
-        self.stop()
-        self.start()
-
-    def get_interval(self):
-        return self.interval() if callable(self.interval) else self.interval
-
-    def stop(self):
-        self.handler.cancel()
-        self.handler = None
+from .timer import Timer
 
 
 class BaseState(object):
@@ -206,3 +183,218 @@ class Follower(BaseState):
     def start_election(self):
         self.server.to_candidate()
 
+
+class Candidate(BaseState):
+    """Raft Candidate
+    — On conversion to candidate, start election:
+        — Increment self term
+        — Vote for self
+        — Reset election timer
+        — Send RequestVote RPCs to all other servers
+    — If votes received from majority of servers: become leader
+    — If AppendEntries RPC received from new leader: convert to follower
+    — If election timeout elapses: start new election
+    """
+
+    def __init__(self, server):
+        super().__init__(server)
+        self.election_timer = Timer(self.election_interval,
+                                    self.server.to_follower,
+                                    self.server.loop)
+        self.vote_count = 0
+
+    def start(self):
+        """Increment current term, vote for herself & send vote requests"""
+        self.term += 1
+        self.voted_for = self.server.id
+
+        self.vote_count = 1
+        self.request_vote()
+        self.election_timer.start()
+
+    def stop(self):
+        self.election_timer.stop()
+
+    def request_vote(self):
+        """RequestVote RPC — gather votes
+        Arguments:
+            term — candidate’s term
+            candidate_id — candidate requesting vote
+            last_log_index — index of candidate’s last log entry
+            last_log_term — term of candidate’s last log entry
+        """
+        data = {
+            'type': 'request_vote',
+            'term': self.term,
+            'candidate_id': self.server.id,
+            'last_log_index': self.log.last_log_index,
+            'last_log_term': self.log.last_log_term
+        }
+        self.server.broadcast(data)
+
+    def on_receive_request_vote_response(self, data):
+        """Receives response for vote request.
+        If the vote was granted then check if we got majority and may
+        becomeLeader
+        """
+        if data.get('vote_granted'):
+            self.vote_count += 1
+            if self.server.is_majority(self.vote_count):
+                self.server.to_leader()
+
+    def on_receive_append_entries(self, data):
+        """If we discover a Leader with the same term — step down"""
+        if self.term == data['term']:
+            self.server.to_follower()
+
+    @property
+    def election_interval(self):
+        return random.uniform(150, 300)
+
+
+class Leader(BaseState):
+    """Raft Leader
+    Upon election: send initial empty AppendEntries RPCs (heartbeat) to
+    each server; repeat during idle periods to prevent election timeouts
+
+    — If command received from client: append entry to local log, respond after
+        entry applied to state machine
+    - If last log index ≥ next_index for a follower: send AppendEntries RPC with
+        log entries starting at next_index
+    — If successful: update next_index and match_index for follower
+    — If AppendEntries fails because of log inconsistency:
+        decrement next_index and retry
+    — If there exists an N such that N > commit_index, a majority of
+        match_index[i] ≥ N, and log[N].term == self term: set commit_index = N
+    """
+
+    def __init__(self, server):
+        super().__init__(server)
+        self.heartbeat_interval = 50
+        self.step_down_missed_heartbeats = 5
+        self.heartbeat_timer = Timer(self.heartbeat_interval,
+                                     self.server.heartbeat,
+                                     self.server.loop)
+        self.step_down_timer = Timer(
+            self.step_down_missed_heartbeats * self.heartbeat_interval,
+            self.server.to_follower, self.server.loop)
+        # monotonically increasing request id and response of each request
+        self.request_id = 0
+        self.response_map = {}
+
+    def start(self):
+        self.init_log()
+        self.heartbeat_timer.start()
+        self.step_down_timer.start()
+
+    def stop(self):
+        self.heartbeat_timer.stop()
+        self.step_down_timer.stop()
+
+    def init_log(self):
+        self.log.next_index = {
+            follower: self.log.last_log_index + 1 for follower in
+            self.server.cluster
+        }
+
+        self.log.match_index = {
+            follower: 0 for follower in self.server.cluster
+        }
+
+    async def append_entries(self, destination=None):
+        """AppendEntries RPC — replicate log entries / heartbeat
+        Args:
+            destination — destination id
+
+        Request params:
+            term — leader’s term
+            leader_id — so follower can redirect clients
+            prev_log_index — index of log entry immediately preceding new ones
+            prev_log_term — term of prev_log_index entry
+            commit_index — leader’s commit_index
+
+            entries[] — log entries to store (empty for heartbeat)
+        """
+
+        # Send AppendEntries RPC to destination if specified or broadcast to
+        # everyone
+        for dest in destination and [destination] or self.server.cluster:
+            data = {
+                'type': 'append_entries',
+                'term': self.term,
+                'leader_id': self.server.id,
+                'commit_index': self.log.commit_index,
+                'request_id': self.request_id
+            }
+            next_index = self.log.next_index[dest]
+            prev_index = next_index - 1
+
+            if self.log.last_log_index >= next_index:
+                data['entries'] = self.log[next_index:]
+            else:
+                data['entries'] = []
+
+            data.update({
+                'prev_log_index': prev_index,
+                'prev_log_term': self.log[prev_index]['term'] if self.log
+                and prev_index else 0
+            })
+            asyncio.ensure_future(self.server.send(data, dest),
+                                  loop=self.server.loop)
+
+    def on_receive_append_entries_response(self, data):
+        sender_id = data['sender']
+
+        # Count all unique responses per particular heartbeat interval
+        # and step down via <step_down_timer> if leader doesn't get majority of
+        # responses for  <step_down_missed_heartbeats> heartbeats
+
+        if data['request_id'] in self.response_map:
+            self.response_map[data['request_id']].add(sender_id)
+            answered = len(self.response_map[data['request_id']])
+            if self.server.is_majority(answered + 1):
+                self.step_down_timer.reset()
+                del self.response_map[data['request_id']]
+
+        if not data['success']:
+            self.log.next_index[sender_id] = \
+                max(self.log.next_index[sender_id] - 1, 1)
+        else:
+            self.log.next_index[sender_id] = data['last_log_index'] + 1
+            self.log.match_index[sender_id] = data['last_log_index']
+            self.update_commit_index()
+
+        # Send AppendEntries RPC to continue updating fast-forward log
+        # (data['success'] == False) or in case there are new entries to sync
+        # (data['success'] == data['updated'] == True)
+        if self.log.last_log_index >= self.log.next_index[sender_id]:
+            host, port = sender_id.split(':')
+            addr = (host.strip(), port.strip())
+            asyncio.ensure_future(self.append_entries(destination=addr),
+                                  loop=self.server.loop)
+
+    def update_commit_index(self):
+        committed_on_majority = 0
+        for index in range(self.log.commit_index + 1,
+                           self.log.last_log_index + 1):
+            committed_count = len([
+                1 for follower in self.log.match_index
+                if self.log.match_index[follower] >= index
+            ])
+
+            # If index is matched on at least half + self for
+            # current term — commit. That may cause commit fails upon restart
+            # with stale logs
+            is_current_term = self.log[index]['term'] == self.term
+            if self.server.is_majority(committed_count + 1) and is_current_term:
+                committed_on_majority = index
+            else:
+                break
+
+        if committed_on_majority > self.log.commit_index:
+            self.log.commit_index = committed_on_majority
+
+    def heartbeat(self):
+        self.request_id += 1
+        self.response_map[self.request_id] = set()
+        asyncio.ensure_future(self.append_entries(), loop=self.server.loop)

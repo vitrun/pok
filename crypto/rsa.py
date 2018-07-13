@@ -23,7 +23,7 @@ print('public key: ', (n, e))
 d, tmp = 0, (p - 1) * (q - 1)
 for i in range(1, tmp):
     if e * i % tmp == 1:
-      d = i
+        d = i
 
 print('private key: ', (n, d))
 

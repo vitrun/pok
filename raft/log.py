@@ -10,16 +10,10 @@ class Log:
 
     def __init__(self):
         # All States
-
         """Volatile state on all servers: index of highest log entry known to
         be committed. (initialized to 0, increases monotonically)
         """
         self.commit_index = 0
-
-        """Volatile state on all servers: index of highest log entry applied
-        to state machine (initialized to 0, increases monotonically)
-        """
-        self.last_applied = 0
 
         # Leaders
         """Volatile state on Leaders: for each server, index of the next log

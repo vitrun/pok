@@ -7,7 +7,7 @@ A simple demo for raft consensus with in-memory log. To play:
 """
 import asyncio
 from .network import UDPProtocol
-from .state import Follower
+from .state import Follower, Candidate, Leader
 
 
 class Node:
@@ -18,6 +18,7 @@ class Node:
     def __init__(self, address):
         self.host, self.port = address
         self.cluster = set()
+        self.id = '{}:{}'.format(self.host, self.port)
 
         self.loop = asyncio.get_event_loop()
         self.state = Follower(self)
@@ -73,3 +74,16 @@ class Node:
     def is_majority(self, count):
         return count > (self.cluster_count // 2)
 
+    def to_candidate(self):
+        self._change_state(Candidate)
+
+    def to_leader(self):
+        self._change_state(Leader)
+
+    def to_follower(self):
+        self._change_state(Follower)
+
+    def _change_state(self, new_state):
+        self.state.stop()
+        self.state = new_state(self)
+        self.state.start()
