@@ -1,6 +1,7 @@
 import asyncio
 import random
 
+import logging
 from .log import Log
 from .timer import Timer
 
@@ -72,7 +73,9 @@ class BaseState(object):
 
     def request_handler(self, data):
         """Dynamically determine the request handler by request type"""
-        getattr(self, 'on_receive_{}'.format(data['type']))(data)
+        func = getattr(self, 'on_receive_{}'.format(data['type']))
+        # logging.debug('%s handling %s', func, data)
+        func(data)
 
 
 class Follower(BaseState):
@@ -230,7 +233,10 @@ class Candidate(BaseState):
             'last_log_index': self.log.last_log_index,
             'last_log_term': self.log.last_log_term
         }
-        self.server.broadcast(data)
+        if self.server.cluster_count > 1:
+            self.server.broadcast(data)
+        else:
+            self.server.to_leader()
 
     def on_receive_request_vote_response(self, data):
         """Receives response for vote request.
@@ -246,6 +252,17 @@ class Candidate(BaseState):
         """If we discover a Leader with the same term — step down"""
         if self.term == data['term']:
             self.server.to_follower()
+        response = {
+            'type': 'append_entries_response',
+            'term': self.term,
+            'success': True,
+            'last_log_index': self.log.last_log_index,
+            'request_id': data['request_id']
+        }
+        asyncio.ensure_future(self.server.send(response, data['sender']),
+                              loop=self.server.loop)
+
+        self.election_timer.reset()
 
     @property
     def election_interval(self):
@@ -271,9 +288,9 @@ class Leader(BaseState):
     def __init__(self, server):
         super().__init__(server)
         self.heartbeat_interval = 50
-        self.step_down_missed_heartbeats = 5
+        self.step_down_missed_heartbeats = 8
         self.heartbeat_timer = Timer(self.heartbeat_interval,
-                                     self.server.heartbeat,
+                                     self.heartbeat,
                                      self.server.loop)
         self.step_down_timer = Timer(
             self.step_down_missed_heartbeats * self.heartbeat_interval,
@@ -294,11 +311,11 @@ class Leader(BaseState):
     def init_log(self):
         self.log.next_index = {
             follower: self.log.last_log_index + 1 for follower in
-            self.server.cluster
+            self.server.peers
         }
 
         self.log.match_index = {
-            follower: 0 for follower in self.server.cluster
+            follower: 0 for follower in self.server.peers
         }
 
     async def append_entries(self, destination=None):
@@ -315,10 +332,9 @@ class Leader(BaseState):
 
             entries[] — log entries to store (empty for heartbeat)
         """
-
         # Send AppendEntries RPC to destination if specified or broadcast to
         # everyone
-        for dest in destination and [destination] or self.server.cluster:
+        for dest in destination and [destination] or self.server.peers:
             data = {
                 'type': 'append_entries',
                 'term': self.term,
@@ -326,6 +342,7 @@ class Leader(BaseState):
                 'commit_index': self.log.commit_index,
                 'request_id': self.request_id
             }
+            # logging.debug('append_entries %s from %s', data, dest)
             next_index = self.log.next_index[dest]
             prev_index = next_index - 1
 
@@ -344,15 +361,17 @@ class Leader(BaseState):
 
     def on_receive_append_entries_response(self, data):
         sender_id = data['sender']
+        # logging.debug('append_entries_response %s from %s', data, sender_id)
 
         # Count all unique responses per particular heartbeat interval
         # and step down via <step_down_timer> if leader doesn't get majority of
         # responses for  <step_down_missed_heartbeats> heartbeats
-
+        # import ipdb; ipdb.set_trace()
         if data['request_id'] in self.response_map:
             self.response_map[data['request_id']].add(sender_id)
             answered = len(self.response_map[data['request_id']])
             if self.server.is_majority(answered + 1):
+                logging.debug('leader %s step down reset', self.server.id)
                 self.step_down_timer.reset()
                 del self.response_map[data['request_id']]
 
@@ -397,4 +416,5 @@ class Leader(BaseState):
     def heartbeat(self):
         self.request_id += 1
         self.response_map[self.request_id] = set()
+        logging.debug('%s hearbeating, request id: %s', self.server.id, self.request_id)
         asyncio.ensure_future(self.append_entries(), loop=self.server.loop)

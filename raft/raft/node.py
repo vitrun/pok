@@ -6,30 +6,36 @@ A simple demo for raft consensus with in-memory log. To play:
 4. Kill the Leader to check the leader election process
 """
 import asyncio
+import logging
 from .network import UDPProtocol
 from .state import Follower, Candidate, Leader
+
+
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s.%(msecs)03d %(levelname)s '
+                           '%(module)s: %(message)s')
 
 
 class Node:
     """Raft Node (Server)"""
 
-    nodes = []
-
     def __init__(self, address):
         self.host, self.port = address
-        self.cluster = set()
+        self.peers = []
         self.id = '{}:{}'.format(self.host, self.port)
 
         self.loop = asyncio.get_event_loop()
         self.state = Follower(self)
         self.requests = asyncio.Queue(loop=self.loop)
-        self.__class__.nodes.append(self)
         self.transport = None
+
+    def request_handler_resolver(self):
+        return self.state.request_handler
 
     async def start(self):
         protocol = UDPProtocol(
             queue=self.requests,
-            request_handler=self.state.request_handler,
+            request_handler_resolver=self.request_handler_resolver,
             loop=self.loop
         )
 
@@ -38,18 +44,19 @@ class Node:
             self.loop.create_datagram_endpoint(protocol, local_addr=address),
             loop=self.loop
         )
+        logging.info('node %s started, peers: %s', self.id, self.peers)
         self.state.start()
 
     def stop(self):
         self.state.stop()
         self.transport.close()
 
-    def update_cluster(self, address_list):
-        self.cluster.update({address_list})
+    def add_node(self, host_port_tuple):
+        self.peers.append(host_port_tuple)
 
     @property
     def cluster_count(self):
-        return len(self.cluster)
+        return len(self.peers) + 1
 
     async def send(self, data, destination):
         """Sends data to destination Node
@@ -60,7 +67,6 @@ class Node:
         if isinstance(destination, str):
             host, port = destination.split(':')
             destination = host, int(port)
-
         await self.requests.put({
             'data': data,
             'destination': destination
@@ -68,7 +74,8 @@ class Node:
 
     def broadcast(self, data):
         """Sends data to all Nodes in cluster"""
-        for destination in self.cluster:
+        for destination in self.peers:
+            # logging.debug('sending %s to %s', data, destination)
             asyncio.ensure_future(self.send(data, destination), loop=self.loop)
 
     def is_majority(self, count):
@@ -85,5 +92,7 @@ class Node:
 
     def _change_state(self, new_state):
         self.state.stop()
+        logging.debug('state of node %s changed from %s to %s', self.id,
+                      self.state.__class__.__name__, new_state.__name__)
         self.state = new_state(self)
         self.state.start()
