@@ -294,10 +294,14 @@ class Leader(BaseState):
                                      self.server.loop)
         self.step_down_timer = Timer(
             self.step_down_missed_heartbeats * self.heartbeat_interval,
-            self.server.to_follower, self.server.loop)
+            self.step_down, self.server.loop)
         # monotonically increasing request id and response of each request
         self.request_id = 0
         self.response_map = {}
+
+    def step_down(self):
+        logging.warning('%s stepping down', self.server)
+        self.server.to_follower()
 
     def start(self):
         self.init_log()
@@ -371,7 +375,7 @@ class Leader(BaseState):
             self.response_map[data['request_id']].add(sender_id)
             answered = len(self.response_map[data['request_id']])
             if self.server.is_majority(answered + 1):
-                logging.debug('leader %s step down reset', self.server.id)
+                # logging.debug('leader %s step down reset', self.server.id)
                 self.step_down_timer.reset()
                 del self.response_map[data['request_id']]
 
@@ -416,5 +420,5 @@ class Leader(BaseState):
     def heartbeat(self):
         self.request_id += 1
         self.response_map[self.request_id] = set()
-        logging.debug('%s hearbeating, request id: %s', self.server.id, self.request_id)
+        logging.debug('%s heart beating, request id: %s', self.server.id, self.request_id)
         asyncio.ensure_future(self.append_entries(), loop=self.server.loop)
